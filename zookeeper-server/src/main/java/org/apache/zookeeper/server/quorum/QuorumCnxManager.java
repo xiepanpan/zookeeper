@@ -689,6 +689,7 @@ public class QuorumCnxManager {
         /*
          * If sending message to myself, then simply enqueue it (loopback).
          */
+        //如果是自己的 不走网络发送 直接添加到本地接收队列
         if (this.mySid == sid) {
             b.position(0);
             addToRecvQueue(new Message(b.duplicate(), sid));
@@ -699,8 +700,11 @@ public class QuorumCnxManager {
             /*
              * Start a new connection if doesn't have one already.
              */
+            //发送给别的节点 判断之前是否发送过
+            //SEND_CAPACITY大小为1 之前有一个还在等待发送 则会把之前的一个删掉 发送新的
             BlockingQueue<ByteBuffer> bq = queueSendMap.computeIfAbsent(sid, serverId -> new CircularBlockingQueue<>(SEND_CAPACITY));
             addToSendQueue(bq, b);
+            //发送
             connectOne(sid);
         }
     }
