@@ -271,6 +271,7 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
                     return;
                 }
             } else {
+                //从outgoingQueue中取出数据包保存到实例中
                 head = outgoingQueue.poll(waitTimeOut, TimeUnit.MILLISECONDS);
             }
             // check if being waken up on closing.
@@ -281,10 +282,15 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
             }
             // channel disconnection happened
             if (disconnected.get()) {
+
+                //异常流程，channel 关闭了，讲当前的 packet 添加到 addBack 中
                 addBack(head);
                 throw new EndOfStreamException("channel for sessionid 0x" + Long.toHexString(sessionId) + " is lost");
             }
+            //关键
             if (head != null) {
+
+                //如果当前存在需要发送的数据包，则调用 doWrite 方法，pendingQueue 表示处于已经发送过等待响应的 packet 队列
                 doWrite(pendingQueue, head, cnxn);
             }
         } finally {
@@ -328,9 +334,13 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
     private ChannelFuture sendPkt(Packet p, boolean doFlush) {
         // Assuming the packet will be sent out successfully. Because if it fails,
         // the channel will close and clean up queues.
+
+        // //序列化请求数据
         p.createBB();
+        //// 更 新 最 后 一 次 发 送updateLastSend
         updateLastSend();
         final ByteBuf writeBuffer = Unpooled.wrappedBuffer(p.bb);
+        // 通过 nio channel 发送字节缓存到服务端
         final ChannelFuture result = doFlush ? channel.writeAndFlush(writeBuffer) : channel.write(writeBuffer);
         result.addListener(onSendPktDoneListener);
         return result;
@@ -349,14 +359,19 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
         boolean anyPacketsSent = false;
         while (true) {
             if (p != WakeupPacket.getInstance()) {
+                ////判断请求头以及判断当前请求类型不是 ping 或者 auth 操作
                 if ((p.requestHeader != null)
                     && (p.requestHeader.getType() != ZooDefs.OpCode.ping)
                     && (p.requestHeader.getType() != ZooDefs.OpCode.auth)) {
+
+                    ////设置 xid，这个 xid 用来区分请求类型
                     p.requestHeader.setXid(cnxn.getXid());
                     synchronized (pendingQueue) {
+                        //将当前的 packet 添加到 pendingQueue 队列中
                         pendingQueue.add(p);
                     }
                 }
+                //将数据包发送出去
                 sendPktOnly(p);
                 anyPacketsSent = true;
             }

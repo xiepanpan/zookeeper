@@ -322,6 +322,7 @@ public class ClientCnxn {
                 BinaryOutputArchive boa = BinaryOutputArchive.getArchive(baos);
                 boa.writeInt(-1, "len"); // We'll fill this in later
                 if (requestHeader != null) {
+                    //序列化 header 头(requestHeader)
                     requestHeader.serialize(boa, "header");
                 }
                 if (request instanceof ConnectRequest) {
@@ -329,6 +330,7 @@ public class ClientCnxn {
                     // append "am-I-allowed-to-be-readonly" flag
                     boa.writeBool(readOnly, "readOnly");
                 } else if (request != null) {
+                    //序列化 request(request)
                     request.serialize(boa, "request");
                 }
                 baos.close();
@@ -435,12 +437,15 @@ public class ClientCnxn {
         this.connectTimeout = sessionTimeout / hostProvider.size();
         this.readTimeout = sessionTimeout * 2 / 3;
 
+        //初始化 sendThread
         this.sendThread = new SendThread(clientCnxnSocket);
+        //初始化 eventThread
         this.eventThread = new EventThread();
         initRequestTimeout();
     }
 
     public void start() {
+        //--启动两个线程
         sendThread.start();
         eventThread.start();
     }
@@ -1173,6 +1178,7 @@ public class ClientCnxn {
             InetSocketAddress serverAddress = null;
             while (state.isAlive()) {
                 try {
+                    //如果没有连接 发起连接
                     if (!clientCnxnSocket.isConnected()) {
                         // don't re-establish connection if we are closing
                         if (closing) {
@@ -1185,12 +1191,14 @@ public class ClientCnxn {
                             serverAddress = hostProvider.next(1000);
                         }
                         onConnecting(serverAddress);
+                        //发起连接
                         startConnect(serverAddress);
                         clientCnxnSocket.updateLastSendAndHeard();
                     }
 
                     if (state.isConnected()) {
                         // determine whether we need to send an AuthFailed event.
+                        //如果是连接状态 则处理sasl的认证授权
                         if (zooKeeperSaslClient != null) {
                             boolean sendAuthEvent = false;
                             if (zooKeeperSaslClient.getSaslState() == ZooKeeperSaslClient.SaslState.INITIAL) {
@@ -1227,6 +1235,9 @@ public class ClientCnxn {
                         to = connectTimeout - clientCnxnSocket.getIdleRecv();
                     }
 
+                    //to 表示客户端距离 timeout还剩下多少时间 准备发起ping连接
+
+                    //超时
                     if (to <= 0) {
                         String warnInfo = String.format(
                             "Client session timed out, have not heard from server in %dms for session id 0x%s",
@@ -1238,11 +1249,13 @@ public class ClientCnxn {
                     if (state.isConnected()) {
                         //1000(1 second) is to prevent race condition missing to send the second ping
                         //also make sure not to send too many pings when readTimeout is small
+                        //计算下一次ping请求的时间
                         int timeToNextPing = readTimeout / 2
                                              - clientCnxnSocket.getIdleSend()
                                              - ((clientCnxnSocket.getIdleSend() > 1000) ? 1000 : 0);
                         //send a ping request either time is due or no packet sent out within MAX_SEND_PING_INTERVAL
                         if (timeToNextPing <= 0 || clientCnxnSocket.getIdleSend() > MAX_SEND_PING_INTERVAL) {
+                            //发送ping请求
                             sendPing();
                             clientCnxnSocket.updateLastSend();
                         } else {
@@ -1265,6 +1278,10 @@ public class ClientCnxn {
                         to = Math.min(to, pingRwTimeout - idlePingRwServer);
                     }
 
+
+                    //调用 clientCnxnSocket，发起传输 其中 pendingQueue 是一个用来存放已经发送、等待回应的 Packet 队列，
+                    //clientCnxnSocket 默 认 使 用
+                    //ClientCnxnSocketNIO（ps：还记得在哪里初始化吗？实例化 zookeeper 的时候）
                     clientCnxnSocket.doTransport(to, pendingQueue, ClientCnxn.this);
                 } catch (Throwable e) {
                     if (closing) {
@@ -1551,6 +1568,7 @@ public class ClientCnxn {
         WatchRegistration watchRegistration,
         WatchDeregistration watchDeregistration) throws InterruptedException {
         ReplyHeader r = new ReplyHeader();
+        //将消息添加到队列,并构造一个 Packet 传输对象
         Packet packet = queuePacket(
             h,
             r,
@@ -1569,6 +1587,8 @@ public class ClientCnxn {
             } else {
                 // Wait for request completion infinitely
                 while (!packet.finished) {
+
+                    //在数据包没有处理完成之前，一直阻塞
                     packet.wait();
                 }
             }
@@ -1638,6 +1658,8 @@ public class ClientCnxn {
         Object ctx,
         WatchRegistration watchRegistration,
         WatchDeregistration watchDeregistration) {
+
+        //将相关传输对象转化成 Packet
         Packet packet = null;
 
         // Note that we do not generate the Xid for the packet yet. It is
@@ -1662,9 +1684,12 @@ public class ClientCnxn {
                 if (h.getType() == OpCode.closeSession) {
                     closing = true;
                 }
+
+                //添加到 outgoingQueue
                 outgoingQueue.add(packet);
             }
         }
+        //触发selector的执行 此处是多路复用机制，唤醒 Selector，告诉他有数据包添加过来了
         sendThread.getClientCnxnSocket().packetAdded();
         return packet;
     }

@@ -640,6 +640,7 @@ public class ZooKeeper implements AutoCloseable {
         this.hostProvider = hostProvider;
         ConnectStringParser connectStringParser = new ConnectStringParser(connectString);
 
+        //初始化了 ClientCnxn，并且调用 cnxn.start()方法
         cnxn = createConnection(
             connectStringParser.getChrootPath(),
             hostProvider,
@@ -1845,9 +1846,12 @@ public class ZooKeeper implements AutoCloseable {
         RequestHeader h = new RequestHeader();
         h.setType(ZooDefs.OpCode.exists);
         ExistsRequest request = new ExistsRequest();
+        //是否注册监听
         request.setPath(serverPath);
         request.setWatch(watcher != null);
+        //设置服务端响应的接收类
         SetDataResponse response = new SetDataResponse();
+        //将封装的 RequestHeader、ExistsRequest、SetDataResponse、WatchRegistration 添加到发送队列
         ReplyHeader r = cnxn.submitRequest(h, request, response, wcb);
         if (r.getErr() != 0) {
             if (r.getErr() == KeeperException.Code.NONODE.intValue()) {
@@ -1856,6 +1860,7 @@ public class ZooKeeper implements AutoCloseable {
             throw KeeperException.create(KeeperException.Code.get(r.getErr()), clientPath);
         }
 
+        //返回 exists 得到的结果（Stat 信息）
         return response.getStat().getCzxid() == -1 ? null : response.getStat();
     }
 
