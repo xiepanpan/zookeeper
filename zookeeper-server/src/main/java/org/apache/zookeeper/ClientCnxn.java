@@ -517,6 +517,7 @@ public class ClientCnxn {
             waitingEvents.add(new LocalCallback(cb, rc, path, ctx));
         }
 
+        //将当前的数据包添加到等待事件通知的队列中
         @SuppressFBWarnings("JLM_JSR166_UTILCONCURRENT_MONITORENTER")
         public void queuePacket(Packet packet) {
             if (wasKilled) {
@@ -728,13 +729,17 @@ public class ClientCnxn {
     }
 
     // @VisibleForTesting
+    // 主要功能是把从 Packet 中取出对应的 Watcher 并注册到 ZKWatchManager 中去
     protected void finishPacket(Packet p) {
         int err = p.replyHeader.getErr();
         if (p.watchRegistration != null) {
+
+            //注册事件
             p.watchRegistration.register(err);
         }
         // Add all the removed watch events to the event queue, so that the
         // clients will be notified with 'Data/Child WatchRemoved' event type.
+        ////将所有移除的监视事件添加到事件队列, 这样客户端能收到 “data/child 事件被移除”的事件类型
         if (p.watchDeregistration != null) {
             Map<EventType, Set<Watcher>> materializedWatchers = null;
             try {
@@ -755,6 +760,7 @@ public class ClientCnxn {
             }
         }
 
+        ////cb 就是 AsnycCallback，如果为 null，表明是同步调用的接口，不需要异步回掉，因此，直接 notifyAll即可。
         if (p.cb == null) {
             synchronized (p) {
                 p.finished = true;
@@ -869,6 +875,7 @@ public class ClientCnxn {
             BinaryInputArchive bbia = BinaryInputArchive.getArchive(bbis);
             ReplyHeader replyHdr = new ReplyHeader();
 
+            //反序列化 header
             replyHdr.deserialize(bbia, "header");
             switch (replyHdr.getXid()) {
             case PING_XID:
@@ -886,9 +893,12 @@ public class ClientCnxn {
                 }
               return;
             case NOTIFICATION_XID:
+                //表示当前的消息类型为一个 notification(意味着是服务端的一个响应事件)
                 LOG.debug("Got notification session id: 0x{}",
                     Long.toHexString(sessionId));
                 WatcherEvent event = new WatcherEvent();
+
+                //反序列化响应信息
                 event.deserialize(bbia, "response");
 
                 // convert from a server path to a client path
@@ -927,6 +937,8 @@ public class ClientCnxn {
                 if (pendingQueue.size() == 0) {
                     throw new IOException("Nothing in the queue, but got " + replyHdr.getXid());
                 }
+
+                ////因为当前这个数据包已经收到了响应，所以讲它从pendingQueued 中移除
                 packet = pendingQueue.remove();
             }
             /*
@@ -934,6 +946,8 @@ public class ClientCnxn {
              * to the first request!
              */
             try {
+
+                //校验数据包信息，校验成功后讲数据包信息进行更新（替换为服务端的信息）
                 if (packet.requestHeader.getXid() != replyHdr.getXid()) {
                     packet.replyHeader.setErr(KeeperException.Code.CONNECTIONLOSS.intValue());
                     throw new IOException("Xid out of order. Got Xid " + replyHdr.getXid()
@@ -949,11 +963,15 @@ public class ClientCnxn {
                     lastZxid = replyHdr.getZxid();
                 }
                 if (packet.response != null && replyHdr.getErr() == 0) {
+                    //获得服 务端的响应，反序列化以后设置到 packet.response 属性 中。
+                    // 所以我们可以在 exists 方法的最后一行通过packet.response 拿到改请求的返回结果
                     packet.response.deserialize(bbia, "response");
                 }
 
                 LOG.debug("Reading reply session id: 0x{}, packet:: {}", Long.toHexString(sessionId), packet);
             } finally {
+
+                //最后调用finishPacket 方法完成处理
                 finishPacket(packet);
             }
         }

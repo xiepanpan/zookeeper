@@ -520,6 +520,7 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
                         initialized = true;
                         updateLastHeard();
                     } else {
+                        //收到消息以后触发 SendThread.readResponse 方法
                         sendThread.readResponse(incomingBuffer);
                         lenBuffer.clear();
                         incomingBuffer = lenBuffer;

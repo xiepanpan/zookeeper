@@ -278,6 +278,7 @@ public class ZooKeeper implements AutoCloseable {
          */
         public void register(int rc) {
             if (shouldAddWatch(rc)) {
+                ////通过子类的实现取得ZKWatchManager 中的 existsWatches
                 Map<String, Set<Watcher>> watches = getWatches(rc);
                 synchronized (watches) {
                     Set<Watcher> watchers = watches.get(clientPath);
@@ -285,6 +286,7 @@ public class ZooKeeper implements AutoCloseable {
                         watchers = new HashSet<Watcher>();
                         watches.put(clientPath, watchers);
                     }
+                    // 将Watcher对象放到ZKWatchManager中 的existsWatches 里面
                     watchers.add(watcher);
                 }
             }
