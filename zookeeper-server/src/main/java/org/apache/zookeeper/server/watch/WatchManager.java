@@ -74,11 +74,14 @@ public class WatchManager implements IWatchManager {
             return false;
         }
 
+        //判断 watcherTable 中是否存在当前路径对应的 watcher
         Set<Watcher> list = watchTable.get(path);
+        //不存在则主动添加
         if (list == null) {
             // don't waste memory if there are few watches on a node
             // rehash when the 4th entry is added, doubling size thereafter
             // seems like a good compromise
+            // 新生成 watcher 集合
             list = new HashSet<>(4);
             watchTable.put(path, list);
         }
@@ -88,11 +91,13 @@ public class WatchManager implements IWatchManager {
         if (paths == null) {
             // cnxns typically have many watches, so use default cap here
             paths = new HashSet<>();
+            // 设置watcher 到节点路径的映射
             watch2Paths.put(watcher, paths);
         }
 
         watcherModeManager.setWatcherMode(watcher, path, watcherMode);
 
+        // 将路径添加至paths集合
         return paths.add(path);
     }
 

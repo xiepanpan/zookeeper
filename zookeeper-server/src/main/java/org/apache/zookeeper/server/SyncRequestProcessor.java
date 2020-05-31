@@ -167,6 +167,8 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 if (si == null) {
                     /* We timed out looking for more writes to batch, go ahead and flush immediately */
                     flush();
+
+                    //从阻塞队列中获取请求
                     si = queuedRequests.take();
                 }
 
@@ -178,6 +180,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUE_TIME.add(startProcessTime - si.syncQueueStartTime);
 
                 // track the number of records written to the log
+                //下面这块代码，粗略看来是触发快照操作，启动一个处理快照的线程
                 if (!si.isThrottled() && zks.getZKDatabase().append(si)) {
                     if (shouldSnapshot()) {
                         resetSnapshotStats();
@@ -205,6 +208,8 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                     // iff this is a read or a throttled request(which doesn't need to be written to the disk),
                     // and there are no pending flushes (writes), then just pass this to the next processor
                     if (nextProcessor != null) {
+
+                        ////继续调用下一个处理器来处理请求
                         nextProcessor.processRequest(si);
                         if (nextProcessor instanceof Flushable) {
                             ((Flushable) nextProcessor).flush();

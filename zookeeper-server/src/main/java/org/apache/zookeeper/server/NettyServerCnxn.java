@@ -168,6 +168,8 @@ public class NettyServerCnxn extends ServerCnxn {
         WatcherEvent e = event.getWrapper();
 
         try {
+
+            //发送响应
             sendResponse(h, e, "notification");
         } catch (IOException e1) {
             LOG.debug("Problem sending to {}", getRemoteSocketAddress(), e1);
@@ -436,6 +438,8 @@ public class NettyServerCnxn extends ServerCnxn {
         checkIsInEventLoop("receiveMessage");
         try {
             while (message.isReadable() && !throttled.get()) {
+
+                // //ByteBuffer 不为空
                 if (bb != null) {
                     if (LOG.isTraceEnabled()) {
                         LOG.trace("message readable {} bb len {} {}", message.readableBytes(), bb.remaining(), bb);
@@ -444,10 +448,13 @@ public class NettyServerCnxn extends ServerCnxn {
                         LOG.trace("0x{} bb {}", Long.toHexString(sessionId), ByteBufUtil.hexDump(Unpooled.wrappedBuffer(dat)));
                     }
 
+                    //bb 剩余空间大于 message 中可读字节大小
                     if (bb.remaining() > message.readableBytes()) {
                         int newLimit = bb.position() + message.readableBytes();
                         bb.limit(newLimit);
                     }
+
+                    // 将 message 写入 bb 中
                     message.readBytes(bb);
                     bb.limit(bb.capacity());
 
@@ -459,8 +466,11 @@ public class NettyServerCnxn extends ServerCnxn {
                                   Long.toHexString(sessionId),
                                   ByteBufUtil.hexDump(Unpooled.wrappedBuffer(dat)));
                     }
+                    // 已经读完 message
                     if (bb.remaining() == 0) {
                         bb.flip();
+
+                        //统计接收信息
                         packetReceived(4 + bb.remaining());
 
                         ZooKeeperServer zks = this.zkServer;
@@ -470,6 +480,7 @@ public class NettyServerCnxn extends ServerCnxn {
                         if (initialized) {
                             // TODO: if zks.processPacket() is changed to take a ByteBuffer[],
                             // we could implement zero-copy queueing.
+                            //处理客户端传送过来的数据包
                             zks.processPacket(this, bb);
                         } else {
                             LOG.debug("got conn req request from {}", getRemoteSocketAddress());
